@@ -115,12 +115,15 @@ AT_FORALL_SCALAR_TYPES_WITH_COMPLEX_AND_QINTS(SPECIALIZE_CppTypeToScalarType)
 
 #undef SPECIALIZE_CppTypeToScalarType
 
-#define AT_FORALL_INT_TYPES(_) \
-  _(uint8_t, Byte)             \
-  _(int8_t, Char)              \
-  _(int16_t, Short)            \
-  _(int, Int)                  \
-  _(int64_t, Long)
+#define AT_FORALL_INT_TYPES_AND(SCALARTYPE, _)                               \
+  _(uint8_t, Byte)                                                           \
+  _(int8_t, Char)                                                            \
+  _(int16_t, Short)                                                          \
+  _(int, Int)                                                                \
+  _(int64_t, Long)                                                           \
+  _(decltype(                                                                \
+        ::c10::impl::ScalarTypeToCPPType<::c10::ScalarType::SCALARTYPE>::t), \
+    SCALARTYPE)
 
 #define AT_FORALL_SCALAR_TYPES(_) \
   _(uint8_t, Byte)                \
