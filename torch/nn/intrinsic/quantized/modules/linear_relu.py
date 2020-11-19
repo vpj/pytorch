@@ -1,6 +1,8 @@
-import torch.nn.quantized as nnq
-import torch.nn.intrinsic
 import torch
+import torch.nn.quantized as nnq
+import torch.nn.intrinsic as nni
+import torch.nn.functional as F
+
 
 class LinearReLU(nnq.Linear):
     r"""
@@ -19,17 +21,14 @@ class LinearReLU(nnq.Linear):
         >>> print(output.size())
         torch.Size([128, 30])
     """
-    _FLOAT_MODULE = torch.nn.intrinsic.LinearReLU
+    _FLOAT_MODULE = nni.LinearReLU
 
     def __init__(self, in_features, out_features, bias=True, dtype=torch.qint8):
-        super(LinearReLU, self).__init__(in_features, out_features, bias, dtype)
+        super().__init__(in_features, out_features, bias, dtype)
 
-    def forward(self, input):
-        Y_q = torch.ops.quantized.linear_relu(
-            input, self._packed_params._packed_params,
-            float(self.scale),
-            int(self.zero_point))
-        return Y_q
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.ops.quantized.linear_relu(
+            x, self._packed_params._packed_params, self.scale, self.zero_point)
 
     def _get_name(self):
         return 'QuantizedLinearReLU'
@@ -37,3 +36,25 @@ class LinearReLU(nnq.Linear):
     @classmethod
     def from_float(cls, mod):
         return super(LinearReLU, cls).from_float(mod)
+
+class LinearReLUBackendIndependent(nnq.LinearBackendIndependent):
+    def __init__(
+            self,
+            in_features,
+            out_features,
+            bias=True,
+            dtype=torch.qint8):
+        super().__init__(in_features, out_features, bias, dtype)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x_dequant = x.dequantize()
+        weight_dequant = self._qweight.dequantize()
+        float_result = F.linear(x_dequant, weight_dequant, self._bias)
+        float_result = F.relu(float_result, inplace=True)
+        # NEEDFIX: we don't have dtype in the Linear module APIs right now!
+        result = torch.quantize_per_tensor(
+            float_result, self.scale, self.zero_point, torch.quint8)
+        return result
+
+    def _get_name(self):
+        return "QuantizedLinearReLU(Backend Independent)"
